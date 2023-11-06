@@ -47,10 +47,10 @@ textBox.innerText = repr(np.sum(grey))
 
 
 # Define your Airtable API information
-AIRTABLE_API_KEY = 'patZo7glYjRIjm8XO.71ae09e17b5bf9ce2d27d6183af4bf0a62eba1c25d59ad65aea367b92c181d03'
-BASE_ID = 'appgVj5jAhsjfLmFU'
-TABLE_NAME = 'tblkJ008IYvimY39n'
-COLOR_ID = 'rec8dqmC2p4TOg5Fl'
+AIRTABLE_API_KEY = ''
+BASE_ID = ''
+TABLE_NAME = ''
+COLOR_ID = ''
 
 # Create a record in Airtable with the detected color
 url = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}/{COLOR_ID}'
