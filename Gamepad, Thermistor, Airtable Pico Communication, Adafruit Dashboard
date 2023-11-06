@@ -1,3 +1,4 @@
+#this is micropython and should run in RP20240 mode
 import machine
 from machine import Pin, I2C
 from i2cSub import i2c_sub
@@ -203,7 +204,9 @@ last_x, last_y, last_btn = 0, 0, [False] * len(BTN_CONST)
 # Temperature sensor
 temp_sensor = machine.ADC(28)
 
-# Temperature thresholds for weather conditions (F)
+# Temperature thresholds for weather conditions (F) , you can adjust this how you please. 
+# These thresholds aren't a real life example of temperature in these conditions..
+# But for the sake of having all my conditions and leds turn on, I made a range of values I will most likely see
 sunny_threshold = 80
 cloudy_threshold = 76
 thunderstorm_threshold = 70
@@ -297,7 +300,7 @@ async def gamepad_task():
 
         await asyncio.sleep(0.01)  # Adjust the sleep duration as needed
 
-
+# connect to wifi
 def connect_wifi(wifi):
     station = network.WLAN(network.STA_IF)
     station.active(True)
@@ -312,10 +315,10 @@ def connect_wifi(wifi):
 
 
 # Define your Airtable API information
-AIRTABLE_API_KEY = 'patZo7glYjRIjm8XO.71ae09e17b5bf9ce2d27d6183af4bf0a62eba1c25d59ad65aea367b92c181d03'
-BASE_ID = 'appgVj5jAhsjfLmFU'
-TABLE_NAME = 'tblkJ008IYvimY39n'
-COLOR_ID = 'rec8dqmC2p4TOg5Fl'
+AIRTABLE_API_KEY = ''
+BASE_ID = ''
+TABLE_NAME = ''
+COLOR_ID = ''
 
 # Create a record in Airtable with the detected color
 url = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}/{COLOR_ID}'
@@ -339,10 +342,12 @@ async def get_from_airtable():
 async def set_color_seen():
     global color_seen
     color_seen = await get_from_airtable()
-    
+
+# this flashes the led based on the color read from AirTable 
+#This happens first when you run the code. it blinks really fast before switching to the temp leds
     if color_seen == "Red":
-        for led in led_green:
-            led.value(1)
+        for led in led_green: #you can make this red but i made it green because my green led lights barely got a chance to light up
+            led.value(1)      # since the temperature range wasn't as frequent 
             
     if color_seen == "Blue":
         for led in led_blue:
@@ -352,16 +357,14 @@ async def set_color_seen():
 # Adafruit IO MQTT Configuration
 MY_URL = 'https://io.adafruit.com/Maria_Constable/feeds'
 ADAFRUIT_IO_URL = "io.adafruit.com"
-ADAFRUIT_IO_USERNAME = "Maria_Constable"
-ADAFRUIT_IO_KEY = "aio_hXoo54kWg7At1bBM4KVAJsOrFZrE"
-ADAFRUIT_IO_FEED_NAME = "Temp every 5 mins"
+ADAFRUIT_IO_USERNAME = ""
+ADAFRUIT_IO_KEY = ""
+ADAFRUIT_IO_FEED_NAME = ""
 
 ADAFRUIT_IO_MQTT_BROKER = "io.adafruit.com"
 ADAFRUIT_IO_MQTT_PORT = 1883
-MQTT_Topic = ADAFRUIT_IO_USERNAME + "/feeds/temp-every-5-mins"
-MQTT_Topic2 = ADAFRUIT_IO_USERNAME + "/feeds/persons-temp"
-#mqtt_client = MQTT.MQTTClient("Room Temperature", mqtt_broker)
-
+MQTT_Topic = ADAFRUIT_IO_USERNAME + "/feeds/{ADAFRUIT_IO_FEED_NAME}"
+MQTT_Topic2 = ADAFRUIT_IO_USERNAME + "/feeds/{ADAFRUIT_IO_FEED_NAME}"
 
 
 async def thermistor_task():
@@ -394,7 +397,7 @@ async def thermistor_task():
             # Disconnect from the Adafruit IO MQTT broker
             mqtt_client.disconnect()
 
-        except Exception as e:
+        except Exception as e:   #always add these types of lines to make debugging easier :)
             print(f"Error: {e}")
 
         await asyncio.sleep(300)  # 5 minutes sleep (300 seconds)
