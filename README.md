@@ -1,6 +1,7 @@
 # CrazyTempMonitor
 Code to read temp, send to airtable &amp; adafruit, detect color, and control displays
-This is code to complete these tasks: 
+
+Specifically, this is code to complete these tasks: 
 1. A physical output of the temperature (could be a screen, LEDs, a motor-controlled pointer, etc connected to your Pico)
 2. Pushes the temperature reading to an Adafruit dashboard every 5 min USING their MQTT broker
 3. Integrates one i2c device in some way 
