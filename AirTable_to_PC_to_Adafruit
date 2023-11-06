@@ -1,0 +1,67 @@
+import struct, time
+import requests
+import asyncio
+import paho.mqtt.client as mqtt
+
+# Define your Airtable API information
+AIRTABLE_API_KEY = ''
+BASE_ID = ''
+TABLE_NAME = ''
+COLOR_ID = ''
+
+# Create a record in Airtable with the detected color
+url = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}/{COLOR_ID}'
+headers = {
+    'Authorization': f'Bearer {AIRTABLE_API_KEY}',
+    'Content-Type': 'application/json',
+}
+
+# Define the data to be sent as a Python dictionary
+
+response = requests.get(url, headers=headers)
+data = response.json()
+print(data)
+
+# Extract the "Color" value from the response
+color = data['fields']['Color']
+
+print(f"The detected color is: {color}")
+
+
+# Send color via MQTT
+# Adafruit IO MQTT Configuration
+MY_URL = 'https://io.adafruit.com//feeds'
+ADAFRUIT_IO_URL = "io.adafruit.com"
+ADAFRUIT_IO_USERNAME = ""
+ADAFRUIT_IO_KEY = ""
+ADAFRUIT_IO_FEED_NAME = ""
+
+ADAFRUIT_IO_MQTT_BROKER = "io.adafruit.com"
+ADAFRUIT_IO_MQTT_PORT = 1883
+MQTT_Topic = ADAFRUIT_IO_USERNAME + "/feeds/"
+
+
+mqtt_client = mqtt.Client(client_id="mqtt_client")
+mqtt_client.username_pw_set(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected to Adafruit IO MQTT")
+    else:
+        print(f"Failed to connect to Adafruit IO MQTT with code {rc}")
+
+def on_publish(client, userdata, mid):
+    print(f"Published color: {color}")
+
+# Set up MQTT client callbacks
+mqtt_client.on_connect = on_connect
+mqtt_client.on_publish = on_publish
+
+# Connect to the Adafruit IO MQTT broker
+mqtt_client.connect("io.adafruit.com", 1883, 60)
+
+# Publish the color to the Adafruit IO feed
+mqtt_client.publish(MQTT_Topic, str(color))
+
+# Run the MQTT client loop in a blocking way
+mqtt_client.loop_forever()
