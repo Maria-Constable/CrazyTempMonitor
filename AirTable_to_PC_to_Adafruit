@@ -1,3 +1,4 @@
+#run this code in python3 mode and ensure you download the paho.mqtt package
 import struct, time
 import requests
 import asyncio
