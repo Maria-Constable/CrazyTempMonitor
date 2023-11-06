@@ -1,4 +1,5 @@
 #this is micropython and should run in RP20240 mode
+#this is code for the Gamepad, Thermistor, Airtable Pico Communication, Adafruit Dashboard Communication 
 import machine
 from machine import Pin, I2C
 from i2cSub import i2c_sub
