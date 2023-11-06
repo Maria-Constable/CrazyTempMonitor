@@ -1,3 +1,4 @@
+#pyscript
 import requests
 import cv2
 import numpy as np
@@ -16,7 +17,7 @@ def detect_color_histogram(frame, color_range):
     hist = cv2.calcHist([hsv], [0], mask, [256], [0, 256])
     return hist
 
-# Define color ranges (you can adjust these values)
+# Define color ranges (you can adjust these values, these worked fine for me but different camera specs might require different stuff)
 red_range = (np.array([0, 100, 100]), np.array([10, 255, 255]))
 blue_range = (np.array([110, 50, 50]), np.array([130, 255, 255]))
 
@@ -32,7 +33,7 @@ else:
 
 
 # Split the image into its color channels
-b, g, r = cv2.split(cv2_image)
+b, g, r = cv2.split(cv2_image) #blue, green, red
 
 # Convert the image to grayscale
 grey = cv2.cvtColor(cv2_image, cv2.COLOR_BGRA2GRAY)
@@ -68,7 +69,8 @@ data = {
 
 response = requests.patch(url, headers=headers, json=data)
 
-if response.status_code == 200:
+#these lines of code made trial and error and debugging much easier!
+if response.status_code == 200:    
     print(f"Detected color: {detected_color} - Record created in Airtable")
 else:
     print("Failed to create record in Airtable")
