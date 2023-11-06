@@ -1,0 +1,446 @@
+import machine
+from machine import Pin, I2C
+from i2cSub import i2c_sub
+import struct, time, utime
+import uasyncio as asyncio
+import urequests as requests
+import math
+import MQTT
+import network
+import ubinascii
+from Secrets import wifi #make a secrets file with your wifi info
+
+
+# Define GPIO pins for LEDs
+# Red Leds (3 LEDs)
+led_red = [Pin(0, mode=Pin.OUT), Pin(1, mode=Pin.OUT), Pin(2, mode=Pin.OUT)]
+
+# Green Leds (4 LEDs)
+led_green = [Pin(20, mode=Pin.OUT), Pin(21, mode=Pin.OUT), Pin(22, mode=Pin.OUT), Pin(26, mode=Pin.OUT)]
+
+# Blue Leds (3 LEDs)
+led_blue = [Pin(17, mode=Pin.OUT), Pin(18, mode=Pin.OUT), Pin(19, mode=Pin.OUT)]
+
+# White Leds (7 LEDs) ..2 not working cause of pico space :( 
+led_white = [Pin(10, mode=Pin.OUT), Pin(11, mode=Pin.OUT), Pin(12, mode=Pin.OUT), Pin(13, mode=Pin.OUT), Pin(16, mode=Pin.OUT)] #Pin(15, mode=Pin.OUT), Pin(16, mode=Pin.OUT)]
+
+# Yellow Leds (2 LEDs)
+led_yellow = [Pin(8, mode=Pin.OUT), Pin(9, mode=Pin.OUT)]
+
+# Define GPIO pins for your LEDs, Rainbow Pins
+# Red led
+led_redbow = Pin(3, mode=Pin.OUT)
+
+# Green led
+led_greenbow = Pin(4, mode=Pin.OUT)
+
+# Blue led
+led_bluebow = Pin(6, mode=Pin.OUT)
+
+# White led
+led_whitebow = Pin(7, mode=Pin.OUT)
+
+# Yellow led
+led_yellowbow = Pin(5, mode=Pin.OUT)
+
+
+#Game pad code
+
+GamePad = 0x50
+i2c = I2C(1, scl=Pin(15), sda=Pin(14), freq=100000)
+
+print([hex(i) for i in i2c.scan()])
+
+ADC_BASE = 0x09
+ADC_OFFSET = 0x07
+GPIO_BASE = 0x01
+GPIO_BULK = 0x04
+GPIO_DIRCLR_BULK = 0x03
+GPIO_PULLENSET = 0x0B
+GPIO_BULK_SET = 0x05
+
+# X button corresponds to bit 6
+BTN_CONST = [1 << 6, 1 << 2, 1 << 5, 1 << 1, 1 << 0, 1 << 16]
+BTN_Value = ['x', 'y', 'A', 'B', 'select', 'start']
+BTN_Mask = 0
+
+for btn in BTN_CONST:
+    BTN_Mask |= btn
+
+def digital_setup():
+    cmd = bytearray(4)
+    cmd[0:] = struct.pack(">I", BTN_Mask)
+    buffer = bytearray([GPIO_BASE, GPIO_DIRCLR_BULK]) + cmd
+    reply = i2c.writeto(GamePad, buffer)
+    buffer = bytearray([GPIO_BASE, GPIO_PULLENSET]) + cmd
+    reply = i2c.writeto(GamePad, buffer)
+    buffer = bytearray([GPIO_BASE, GPIO_BULK_SET]) + cmd
+    reply = i2c.writeto(GamePad, buffer)
+
+def digital_read(delay=0.008):
+    '''Get the values of all the pins on the "B" port as a bitmask'''
+    buffer = bytearray([GPIO_BASE, GPIO_BULK])
+    buf = i2c.writeto(GamePad, buffer)
+    time.sleep(delay)
+    buf = i2c.readfrom(GamePad, 4)
+
+    try:
+        ret = struct.unpack(">I", buf)[0]
+    except OverflowError:
+        buf[0] = buf[0] & 0x3F
+        ret = struct.unpack(">I", buf)[0]
+
+    return ret & BTN_Mask
+
+def read_joystick(pin, delay=0.008):
+    '''Read an analog signal from the gamepad'''
+    reply = i2c.writeto(GamePad, bytearray([ADC_BASE, ADC_OFFSET + pin]))
+    time.sleep(delay)
+    reply = i2c.readfrom(GamePad, 2)
+    return struct.unpack('>H', reply)[0]
+
+# Define functions to control LED conditions
+#Rainbow uses all five colors (5 leds)
+def set_rainbow_leds():
+    print("Setting Rainbow LEDs")
+    led_redbow.value(1)
+    led_greenbow.value(1)
+    led_whitebow.value(1)
+    led_yellowbow.value(1)
+    led_bluebow.value(1)
+
+
+#Lightning Bolt uses yellow (3 leds)
+def set_lightning_bolt_leds():
+    print("Setting Lightning LEDs")
+    for led in led_red:
+        led.value(0)
+    for led in led_green:
+        led.value(0)
+    for led in led_yellow:
+        led.value(1)
+    for led in led_blue:
+        led.value(0)
+    for led in led_white:
+        led.value(0)
+
+#Snowflakes uses white (7 leds)
+def set_snowflakes_leds():
+    print("Setting Snowflakes LEDs")
+    for led in led_red:
+        led.value(0)
+    for led in led_green:
+        led.value(0)
+    for led in led_yellow:
+        led.value(0)
+    for led in led_blue:
+        led.value(0)
+    for led in led_white:
+        led.value(1)
+
+#Rain falls uses blue (3 leds)
+def set_rain_falls_leds():
+    print("Setting Rain LEDs")
+    for led in led_red:
+        led.value(0)
+    for led in led_green:
+        led.value(0)
+    for led in led_yellow:
+        led.value(0)
+    for led in led_blue:
+        led.value(1)
+    for led in led_white:
+        led.value(0)
+
+#Assign letters to reactions
+def set_leds(led_state):
+    clear_all_leds()
+    
+    if led_state == 'A':
+        set_rainbow_leds()
+    elif led_state == 'B':
+        set_lightning_bolt_leds()
+    elif led_state == 'x':
+        set_snowflakes_leds()
+    elif led_state == 'y':
+        set_rain_falls_leds()
+
+#Turn leds off
+def clear_all_leds():
+    led_redbow.value(0)
+    led_greenbow.value(0)
+    led_whitebow.value(0)
+    led_yellowbow.value(0)
+    led_bluebow.value(0)
+    for led in led_red:
+        led.value(0)
+    for led in led_green:
+        led.value(0)
+    for led in led_yellow:
+        led.value(0)
+    for led in led_blue:
+        led.value(0)
+    for led in led_white:
+        led.value(0)
+
+# Define a timeout for turning off the LEDs (in seconds)
+auto_off_timeout = 5
+last_button_press_time = 0
+last_led_state = None
+
+#turn led off automatically after a while
+def auto_off_leds():
+    current_time = time.ticks_ms()
+    if time.ticks_diff(current_time, last_button_press_time) > auto_off_timeout * 1000:
+        clear_all_leds()
+
+digital_setup()
+last_x, last_y, last_btn = 0, 0, [False] * len(BTN_CONST)
+
+
+#Thermistor Code
+
+# Temperature sensor
+temp_sensor = machine.ADC(28)
+
+# Temperature thresholds for weather conditions (F)
+sunny_threshold = 80
+cloudy_threshold = 76
+thunderstorm_threshold = 70
+rainy_threshold = 60
+snowy_threshold = 55  
+none_threshold = 100
+
+async def read_temperature():
+    while True:
+        temperature_value = temp_sensor.read_u16()
+        print("Raw temperature:", temperature_value)
+        temperature_Cel = convert_to_celsius(temperature_value)
+        temperature_Fah = convert_to_fahrenheit(temperature_Cel)
+        print('Celsius: {:.2f} C  Fahrenheit: {:.2f} F'.format(temperature_Cel, temperature_Fah))
+        await asyncio.sleep(60)  #change to 5 minutes for adafruit data 
+    
+def convert_to_celsius(temperature_value):
+    Vr = 3.3 * float(temperature_value) / 65535
+    Rt = 10000 * Vr / (3.3 - Vr)
+    temp = 1 / (((math.log(Rt / 10000)) / 3950) + (1 / (273.15 + 25)))
+    return temp - 273.15
+
+def convert_to_fahrenheit(temperature_Cel):
+    return (temperature_Cel * 9/5) + 32
+
+def determine_weather_condition(temperature_Fah):
+    if temperature_Fah >= sunny_threshold:
+        return "Sunny"
+    elif temperature_Fah >= cloudy_threshold:
+        return "Cloudy"
+    elif temperature_Fah >= thunderstorm_threshold:
+        return "Thunderstorm"
+    elif temperature_Fah >= rainy_threshold:
+        return "Rainy"
+    elif temperature_Fah >= snowy_threshold:
+        return "Snowy"
+    elif temperature_Fah >= none_threshold:
+        return "None"
+    else:
+        return "Unknown"
+
+def activate_leds(weather_condition):
+    clear_all_leds()
+
+    if weather_condition == "Thunderstorm":
+        for led in led_red:
+            led.value(1)
+    elif weather_condition == "Cloudy":
+        for led in led_green:
+            led.value(1)
+    elif weather_condition == "Rainy":
+        for led in led_blue:
+            led.value(1)
+    elif weather_condition == "Snowy":
+        for led in led_white:
+            led.value(1)
+    elif weather_condition == "Sunny":
+        for led in led_yellow:
+            led.value(1)
+
+async def gamepad_task():
+    last_x, last_y, last_btn = 0, 0, [False] * len(BTN_CONST)
+    auto_off_timeout = 5
+    last_button_press_time = 0
+    last_led_state = None
+    while True:
+        # Read gamepad state
+        x = 1023 - read_joystick(14)
+        y = 1023 - read_joystick(15)
+
+  
+        if (abs(x - last_x) > 2) or (abs(y - last_y) > 2):
+            clear_all_leds()
+            last_x, last_y = x, y
+
+        buttons = [not digital_read() & btn for btn in BTN_CONST]
+
+        for btn, last, name in zip(buttons, last_btn, BTN_Value):
+            if btn and not last:  # If a button is pressed and was not pressed before
+                set_leds(name)
+                last_button_press_time = time.ticks_ms()
+                last_led_state = name
+                print(last_led_state)
+
+        last_btn = buttons
+
+        current_time = time.ticks_ms()
+        if last_led_state and time.ticks_diff(current_time, last_button_press_time) > auto_off_timeout * 1000:
+            clear_all_leds()
+            last_led_state = None
+
+        await asyncio.sleep(0.01)  # Adjust the sleep duration as needed
+
+
+def connect_wifi(wifi):
+    station = network.WLAN(network.STA_IF)
+    station.active(True)
+    mac = ubinascii.hexlify(network.WLAN().config('mac'),':').decode()
+    print("MAC " + mac)
+
+    station.connect(wifi['ssid'],wifi['pass'])
+    while not station.isconnected():
+        time.sleep(1)
+    print('Connection successful! You are connected to WiFi')
+    print(station.ifconfig())
+
+
+# Define your Airtable API information
+AIRTABLE_API_KEY = 'patZo7glYjRIjm8XO.71ae09e17b5bf9ce2d27d6183af4bf0a62eba1c25d59ad65aea367b92c181d03'
+BASE_ID = 'appgVj5jAhsjfLmFU'
+TABLE_NAME = 'tblkJ008IYvimY39n'
+COLOR_ID = 'rec8dqmC2p4TOg5Fl'
+
+# Create a record in Airtable with the detected color
+url = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}/{COLOR_ID}'
+headers = {
+    'Authorization': f'Bearer {AIRTABLE_API_KEY}',
+    'Content-Type': 'application/json',
+}
+
+# Function to send data to the Airtable REST API
+async def get_from_airtable():
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        color_data = response.json()
+        color_seen = color_data['fields']['Color']
+        print(f"The detected color is: {color_seen}")
+        return color_seen
+    else:
+        print(f"Failed to get data from Airtable. Status Code: {response.status_code}")
+        return None
+
+async def set_color_seen():
+    global color_seen
+    color_seen = await get_from_airtable()
+    
+    if color_seen == "Red":
+        for led in led_green:
+            led.value(1)
+            
+    if color_seen == "Blue":
+        for led in led_blue:
+            led.value(1)
+    
+
+# Adafruit IO MQTT Configuration
+MY_URL = 'https://io.adafruit.com/Maria_Constable/feeds'
+ADAFRUIT_IO_URL = "io.adafruit.com"
+ADAFRUIT_IO_USERNAME = "Maria_Constable"
+ADAFRUIT_IO_KEY = "aio_hXoo54kWg7At1bBM4KVAJsOrFZrE"
+ADAFRUIT_IO_FEED_NAME = "Temp every 5 mins"
+
+ADAFRUIT_IO_MQTT_BROKER = "io.adafruit.com"
+ADAFRUIT_IO_MQTT_PORT = 1883
+MQTT_Topic = ADAFRUIT_IO_USERNAME + "/feeds/temp-every-5-mins"
+MQTT_Topic2 = ADAFRUIT_IO_USERNAME + "/feeds/persons-temp"
+#mqtt_client = MQTT.MQTTClient("Room Temperature", mqtt_broker)
+
+
+
+async def thermistor_task():
+    while True:
+        temperature_value = temp_sensor.read_u16()
+        temperature_Cel = convert_to_celsius(temperature_value)
+        temperature_Fah = convert_to_fahrenheit(temperature_Cel)
+        weather_condition = determine_weather_condition(temperature_Fah)
+        print('Celsius: {:.2f} C  Fahrenheit: {:.2f} F'.format(temperature_Cel, temperature_Fah))
+        print("Weather Condition:", weather_condition)
+        activate_leds(weather_condition)
+
+        # Create an MQTT client
+        mqtt_client = MQTT.MQTTClient(client_id="umqtt_client", server=ADAFRUIT_IO_MQTT_BROKER, port=ADAFRUIT_IO_MQTT_PORT, user=ADAFRUIT_IO_USERNAME, password=ADAFRUIT_IO_KEY)
+
+        try:
+            # Connect to the Adafruit IO MQTT broker
+            mqtt_client.connect()
+            print("Connected to Adafruit IO MQTT")
+
+            if color_seen == "Red":
+                # Publish the temperature reading in Celsius to the Adafruit IO feed
+                mqtt_client.publish(MQTT_Topic, str(temperature_Cel))
+                print(f"Published Celsius temperature: {temperature_Cel}°C")
+            else:
+                # Publish the temperature reading in Fahrenheit (default) to the Adafruit IO feed
+                mqtt_client.publish(MQTT_Topic, str(temperature_Fah))
+                print(f"Published Fahrenheit temperature: {temperature_Fah}°F")
+
+            # Disconnect from the Adafruit IO MQTT broker
+            mqtt_client.disconnect()
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+        await asyncio.sleep(300)  # 5 minutes sleep (300 seconds)
+    
+async def touch_temperature():
+    while True:
+        temperature_value = temp_sensor.read_u16()
+        temperature_Cel = convert_to_celsius(temperature_value)
+        temperature_Fah = convert_to_fahrenheit(temperature_Cel)
+        weather_condition = determine_weather_condition(temperature_Fah)
+        print('Celsius: {:.2f} C  Fahrenheit: {:.2f} F'.format(temperature_Cel, temperature_Fah))
+        print("Weather Condition:", weather_condition)
+        activate_leds(weather_condition)
+        
+        # Create an MQTT client
+        mqtt_client = MQTT.MQTTClient(client_id="umqtt_client", server=ADAFRUIT_IO_URL, port=ADAFRUIT_IO_MQTT_PORT, user=ADAFRUIT_IO_USERNAME, password=ADAFRUIT_IO_KEY)
+
+        try:
+            # Connect to the Adafruit IO MQTT broker
+            mqtt_client.connect()
+            print("Connected to Adafruit IO MQTT")
+
+            # Publish the temperature reading to the Adafruit IO feed
+            try:
+                mqtt_client.publish(MQTT_Topic2, str(temperature_Fah))
+            except Exception as e:
+                print("Error publishing temperature:", e)
+
+            print(f"Published Touch temperature: {temperature_Fah}°F")
+
+            # Disconnect from the Adafruit IO MQTT broker
+            mqtt_client.disconnect()
+            
+        except Exception as e:
+            print(f"Error: {e}")
+
+        await asyncio.sleep(20)  
+    
+async def main():
+    connect_wifi(wifi)
+    loop = asyncio.get_event_loop()
+    loop.create_task(set_color_seen())
+    loop.create_task(gamepad_task())
+    loop.create_task(thermistor_task())
+    loop.create_task(touch_temperature())
+    await asyncio.gather(gamepad_task(), set_color_seen(), thermistor_task(), touch_temperature())
+
+if __name__ == '__main__':
+    asyncio.run(main())
