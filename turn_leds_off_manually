@@ -1,4 +1,4 @@
-#Simple code to just turn off the leds entirely since the code will run forever unless you manually stop it
+#Simple code to just turn off the leds entirely since the code (Gamepad, thermistor...) will run forever unless you manually stop it
 import machine
 from machine import Pin
 
